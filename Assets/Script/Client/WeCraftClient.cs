@@ -1,12 +1,6 @@
-using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Net;
-using System.Net.Sockets.Kcp.Simple;
-using System.Threading;
-using System.Threading.Tasks;
 using NLog;
 using UnityEngine;
+using UnityEngine.InputSystem;
 using WeCraft.Client;
 using WeCraft.Core;
 using WeCraft.Core.C2S;
@@ -27,12 +21,20 @@ public class WeCraftClient : MonoBehaviour
         NetworkManager.Initialize(this);
     }
 
+    private void Update()
+    {
+        if (Keyboard.current[Key.Space].wasPressedThisFrame)
+        {
+            var chan=Core.Handler.GetDefaultChannel();
+            NetworkManager.Send(chan.Id, PackId.C2S_Ping, new C2S_Ping() { msg = "HelloWorld" });
+        }
+    }
+
     private void Start()
     {
         NetworkManager.Connect();
-        var chan=Core.Handler.GetDefaultChannel();
-        NetworkManager.Send(chan.Id, PackId.C2S_Ping, new C2S_Ping() { msg = "HelloWorld" });
-        chan.RegisterHandler(PackId.S2C_Pong, (data =>
+        var chan=Core.Handler.GetDefaultChannel(); 
+        chan.RegisterHandler((ushort)PackId.S2C_Pong, ((id,data) =>
         {
             Debug.Log("--------------------------------");
             Debug.Log(PBUtil.Deserialize<S2C_Pong>(data).msg);

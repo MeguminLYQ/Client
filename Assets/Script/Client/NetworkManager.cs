@@ -1,12 +1,15 @@
 ﻿using System;
 using System.Net;
-using System.Net.Sockets;
-using System.Net.Sockets.Kcp.Simple;
+using System.Net.Sockets; 
 using System.Threading;
 using System.Threading.Tasks;
 using NLog;
+using Riptide;
+using Riptide.Utils;
 using UnityEngine;
+using UnityEngine.Profiling;
 using WeCraft.Core;
+using WeCraft.Core.Util;
 using Logger = NLog.Logger;
 
 namespace WeCraft.Client
@@ -14,6 +17,7 @@ namespace WeCraft.Client
     [Serializable]
     public class NetworkManager
     {
+
         [SerializeField]
         private string _remoteAddress="127.0.0.1";
 
@@ -22,8 +26,7 @@ namespace WeCraft.Client
             get => _remoteAddress;
             set
             {
-                _remoteAddress = value;
-                RemoteIp.Address = IPAddress.Parse(_remoteAddress);
+                _remoteAddress = value; 
             }
         }
         [SerializeField]
@@ -39,97 +42,106 @@ namespace WeCraft.Client
                     Logger.Error($"错误,{value}不是一个合法的端口范围");
                     return;
                 }
-                _remotePort = value;
-                RemoteIp.Port = _remotePort;
+                _remotePort = value; 
             }
         }
         [field: SerializeField]
-        public int LocalPort { get; set; }= 25576;
-
-        public IPEndPoint RemoteIp { get; private set; }
+        public int LocalPort { get; set; }= 25576; 
         
-        private SimpleKcpClient KcpConnection;
+        private Riptide.Client EmbeddedClient;
 
         public Logger Logger { get; private set; }
 
         public CancellationTokenSource CancelToken = new CancellationTokenSource();
 
-        public bool IsConnected => KcpConnection != null;
+        public bool IsConnected => EmbeddedClient is { IsConnected: true };
 
         private WeCraftClient _client;
 
         public void Initialize(WeCraftClient client)
         {
             _client = client;
-            Logger = LogManager.GetCurrentClassLogger();
-
-            RemoteIp = new IPEndPoint(IPAddress.Parse(_remoteAddress),_remotePort);
+            Logger = LogManager.GetCurrentClassLogger(); 
+            RiptideLogger.Initialize(Logger.Debug,Logger.Info,Logger.Warn,Logger.Error,false); 
         }
         public void Connect()
         {
-            Disconnect();
-            try
-            {
-                KcpConnection = new SimpleKcpClient(LocalPort, RemoteIp);
-                CancelToken = new CancellationTokenSource();
-                Task.Run(UpdateKcp, CancelToken.Token);
-                Task.Run(Receive, CancelToken.Token);
-            }
-            catch (SocketException e)
-            {
-                Logger.Error(e);
-                Disconnect();
-                return;
-            } 
-            Logger.Info($"连接成功 {_remoteAddress}:{_remotePort}");
+            Disconnect(); 
+            EmbeddedClient = new Riptide.Client();
+            CancelToken = new CancellationTokenSource();
+            Task.Run(StartEmbeddedClient);  
         }
         public void Disconnect()
         {
-            CancelToken.Cancel();
-            try
-            {
-                KcpConnection?.Close();
-            }
-            catch (Exception)
-            {
-                // ignored
-            }
-            KcpConnection = null;
+            CancelToken.Cancel(); 
         }
 
-        private async void UpdateKcp()
+        private async void StartEmbeddedClient()
         {
-            while (true)
+            EmbeddedClient.Connected += (a,b) =>
             {
-                KcpConnection.kcp.Update(DateTimeOffset.UtcNow);
+                Logger.Info($"连接成功 {_remoteAddress}:{_remotePort}");
+            };
+            
+            EmbeddedClient.Disconnected += (a,b) =>
+            {
+                Logger.Info($"连接成功 {_remoteAddress}:{_remotePort}");
+            };
+            EmbeddedClient.ConnectionFailed += (a, b) =>
+            {
+                Logger.Info($"连接失败 {_remoteAddress}:{_remotePort}");
+            };
+            EmbeddedClient.MessageReceived += OnMessageReceive;
+            
+            
+            EmbeddedClient.Connect($"{_remoteAddress}:{_remotePort}", 1, 0, null, false);
+            
+            while (!CancelToken.IsCancellationRequested)
+            {
+                Profiler.BeginSample("WeCraft-Network-Update");
+                EmbeddedClient.Update();
                 await Task.Delay(10,this.CancelToken.Token);
+                Profiler.EndSample();
             }
+
+            EmbeddedClient.MessageReceived -= OnMessageReceive;
+            EmbeddedClient?.Disconnect();
+            EmbeddedClient = null;
         }
 
-        private async void Receive()
+        private void OnMessageReceive(object sender, MessageReceivedEventArgs e)
         {
-            while (true)
-            {   
-                byte[] res=await KcpConnection.ReceiveAsync(); 
-                _client.Core.Handler.HandleBytes(res);
-            }
+            var message=e.Message;
+            var clientId = e.FromConnection.Id;
+            this._client.Core.Handler.HandleMessage(clientId,message.GetUShort(),message.GetUShort(),message.GetBytes());
+
         }
-        
-        
-        public void Send(uint chanId,uint id,object data)
+
+        public void Send(ushort chanId,ushort id,object data,bool reliable=true)
         {
             if (!IsConnected)
             {
                 Logger.Debug("网络未连接");    
                 return;
             }
-            var bytes = _client.Core.Handler.GetSendBytes(chanId, id, data);
-            KcpConnection.SendAsync(bytes,bytes.Length);
+            var message = CreateMessage(chanId, id, data, reliable);
+            EmbeddedClient.Send(message);
         }
 
-        public void Send(uint chanId, PackId id, object data)
+        public void Send(ushort chanId, PackId id, object data,bool reliable=true)
         {
-            Send(chanId,(uint)id,data);
+            Send(chanId,(ushort)id,data,reliable);
+        }
+        
+        private Message CreateMessage(ushort chanId, ushort packId, object data, bool reliable = true)
+        {
+            Message message = reliable
+                ? Message.Create(MessageSendMode.Reliable,0)
+                : Message.Create(MessageSendMode.Unreliable,0);
+            message.AddUShort(chanId);
+            message.AddUShort(packId);
+            message.AddBytes(PBUtil.Serialize(data));
+             return message;
         }
     }
 }
