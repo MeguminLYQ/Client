@@ -1,49 +1,51 @@
 using NLog;
-using UnityEngine;
-using UnityEngine.InputSystem;
+using Script.Mod;
+using UnityEngine; 
 using WeCraft.Client;
 using WeCraft.Core;
-using WeCraft.Core.C2S;
-using WeCraft.Core.S2C;
-using WeCraft.Core.Util;
-using Logger = NLog.Logger;
-
-public class WeCraftClient : MonoBehaviour
-{
+using WeCraft.Core.Network; 
  
-    public WeCraftCore Core { get; private set; }
-    [field: SerializeField]
-    public NetworkManager NetworkManager { get; private set; } 
-    private void Awake()
-    {
-        Logger logger = LogManager.GetCurrentClassLogger();
-        Core = new WeCraftCore();
-        NetworkManager.Initialize(this);
+public class WeCraftClient : WeCraftCore
+{
+    public NetworkManager NetworkManager;
+    public string RemoteAddress="127.0.0.1";
+    public ushort RemotePort=25575;
+    private static WeCraftClient Client;
+    protected WeCraftClient()
+    { 
+        //init value 
+        this.LoggerImpl = LogManager.GetLogger("WeCraftClient");  
+        this.IsServer = true;
+        //set up manager
+        this.GameLogicImpl = null;
+        this.NetworkManager = new NetworkManager(this);
+        this.NetworkManagerImpl=this.NetworkManager;
+        this.ModManagerImpl = new ModManager(this);
+        this.NetworkHandlerImpl = new NetworkHandler(); 
+
+        (this.ModManagerImpl as ModManager).Load();
+
     }
 
-    private void Update()
-    {
-        if (Keyboard.current[Key.Space].wasPressedThisFrame)
-        {
-            var chan=Core.Handler.GetDefaultChannel();
-            NetworkManager.Send(chan.Id, PackId.C2S_Ping, new C2S_Ping() { msg = "HelloWorld" });
-        }
-    }
-
-    private void Start()
+    public void Start()
     {
         NetworkManager.Connect();
-        var chan=Core.Handler.GetDefaultChannel(); 
-        chan.RegisterHandler((ushort)PackId.S2C_Pong, ((id,data) =>
-        {
-            Debug.Log("--------------------------------");
-            Debug.Log(PBUtil.Deserialize<S2C_Pong>(data).msg);
-        }));
+         
     }
 
-    private void OnDestroy()
+    public void Stop()
     {
         NetworkManager.Disconnect();
         LogManager.Shutdown();
+    }
+
+    public static WeCraftClient GetInstance()
+    {
+        if (Client == null)
+        {
+            Client = new WeCraftClient();
+            CoreImpl = Client;
+        }
+        return Client;
     }
 }
