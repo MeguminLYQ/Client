@@ -9,7 +9,8 @@ namespace Script
     public class GameManager: MonoBehaviour
     {
         public PlayerInput PlayerInput;
-        public static GameManager Instance;
+        public static GameManager Instance; 
+        [NonSerialized]
         public WeCraftClient Client;
         public C2S_PlayerProfile PlayerProfile;
         private void Awake()

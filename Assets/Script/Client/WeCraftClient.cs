@@ -1,10 +1,12 @@
+using System;
 using NLog;
 using Script.Mod;
 using UnityEngine; 
 using WeCraft.Client;
 using WeCraft.Core;
 using WeCraft.Core.Network; 
- 
+
+
 public class WeCraftClient : WeCraftCore
 {
     public NetworkManager NetworkManager;
@@ -15,7 +17,8 @@ public class WeCraftClient : WeCraftCore
     { 
         //init value 
         this.LoggerImpl = LogManager.GetLogger("WeCraftClient");  
-        this.IsServer = true;
+        this.IsServer = false;
+        this.IsClient = true;
         //set up manager
         this.GameLogicImpl = null;
         this.NetworkManager = new NetworkManager(this);

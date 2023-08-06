@@ -10,17 +10,16 @@ using Riptide.Utils;
 using Script;
 using UnityEngine;
 using UnityEngine.Profiling;
+using WeCraft.Client.Event;
 using WeCraft.Core.C2S;
+using WeCraft.Core.Event;
 using WeCraft.Core.Network;
-using WeCraft.Core.Utility;
+using WeCraft.Core.Utility; 
 using Channel = WeCraft.Core.Network.Channel;
-using EventHandler = WeCraft.Core.EventHandler.EventHandler;
 using Logger = NLog.Logger;
-using LogType = Riptide.Utils.LogType;
 
 namespace WeCraft.Client
-{
-    [Serializable]
+{ 
     public class NetworkManager:INetworkManager
     { 
         private string _remoteAddress => _client.RemoteAddress;
@@ -63,7 +62,8 @@ namespace WeCraft.Client
                 EmbeddedClient.Connected += (a,b) =>
                 {
                     Logger.Info($"连接成功 {_remoteAddress}:{_remotePort}");
-                    EventHandler.ExecuteEvent(ClientEventName.OnConnectedToServer);
+                    // EventHandler.ExecuteEvent(ClientEventName.OnConnectedToServer);
+                    EventBus.Post(new ConnectToServerEvent());
                 }; 
                 EmbeddedClient.Disconnected += (a,b) =>
                 {
@@ -118,7 +118,12 @@ namespace WeCraft.Client
             var message = CreateMessage(chanId, id, data, reliable);
             EmbeddedClient.Send(message);
         }
- 
+
+
+        public void SendToAllClient(ushort chanId, PackId id, object data, bool reliable = true)
+        {
+            throw new NotImplementedException();
+        }
 
         public void SendToServer(ushort chanId, PackId id, object data,bool reliable=true)
         {
@@ -136,7 +141,12 @@ namespace WeCraft.Client
             SendToClient(connid,chanId,(ushort)id,data,reliable);
         }
 
-        
+        public void SendToAllClient(ushort chanId, ushort id, object data, bool reliable = true)
+        {
+            throw new NotImplementedException();
+        }
+
+
         private Message CreateMessage(ushort chanId, ushort packId, object data, bool reliable = true)
         {
             Message message = reliable

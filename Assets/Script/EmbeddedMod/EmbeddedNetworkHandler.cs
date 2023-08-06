@@ -1,5 +1,6 @@
 ﻿using System;
 using WeCraft.Client;
+using WeCraft.Client.Event;
 using WeCraft.Core.Network;
 
 namespace Script.Mod
@@ -12,7 +13,7 @@ namespace Script.Mod
             this.mod = mod;
         }
         
-        public void OnConnectedToServer()
+        public void OnConnectedToServer(ConnectToServerEvent @event)
         {
             var playerProfile = mod.GameManager.PlayerProfile;
             if (string.IsNullOrEmpty(playerProfile.Guid))

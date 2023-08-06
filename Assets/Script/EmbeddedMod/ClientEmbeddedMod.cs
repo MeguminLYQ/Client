@@ -1,4 +1,6 @@
 ﻿using WeCraft.Client;
+using WeCraft.Client.Event;
+using WeCraft.Core.Event;
 using WeCraft.Core.EventHandler;
 using WeCraft.Core.Mod;
 using WeCraft.Core.Network;
@@ -23,7 +25,7 @@ namespace Script.Mod
 
         public override void OnEnable()
         { 
-            EventHandler.RegisterEvent(ClientEventName.OnConnectedToServer,_handler.OnConnectedToServer);
+            EventBus.Register(new ModId(),new ExecuteDelegate<ConnectToServerEvent>(_handler.OnConnectedToServer));
         }
 
         public override void OnDisable()
